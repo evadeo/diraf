@@ -9,6 +9,7 @@ set(
     sources
 
     src/distributed_rf.cc
+    src/error_functions.cc
     src/tree.cc
     src/main.cc
 )
