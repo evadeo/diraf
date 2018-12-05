@@ -1,0 +1,32 @@
+####### TODO ###########
+
+- Distributed Code                      [X]
+  |- Constructor                        [X]
+  |- Fit                                [X]
+  |- Predict                            [X]
+  |- Topology                           [X]
+
+- Error functions                       [~]
+  |- Gini                               [V]
+  |- Information Gain                   [X]
+
+//Not Distributed
+- Random Forest                         [~]
+  |- Decision Tree                      [~]
+  |  |- Tree building                   [V]
+  |  |- Split function                  [V]
+  |  |- Splitted features               [V]
+  |  |- Compute Error                   [V]
+  |  |- Find Termination Criterion      [~]
+  |
+  |- Forest                             [~]
+  |  |- Fit                             [~]
+  |  |  |- Compute random features      [V]
+  |  |  |- Building multiple DTrees     [V]
+  |  |  |- Store computed DTress        [V]
+  |  |- Predict                         [X]
+
+
+[X]: Not Done
+[~]: WIP
+[V]: Done
