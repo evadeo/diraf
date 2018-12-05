@@ -1,21 +1,31 @@
 #include "tree.hh"
-
+#include "utils.hh"
 #include <algorithm>
 #include <iterator>
-#include <random>
-#include <set>
+#include <iostream>
 
-static int get_split_value(const std::vector<int>& feature_values,
-                           const std::vector<int>& labels)
+static int get_split_value(const std::vector<int>& feature_values)
 {
     const auto max_index = std::max_element(feature_values.begin(), feature_values.end());
     const auto min_index = std::min_element(feature_values.begin(), feature_values.end());
 
     //TODO: update this
+    //std::cout << "COUCOU" << std::endl;
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(feature_values[*min_index], feature_values[*max_index]);
+    std::uniform_int_distribution<> dis(*min_index, *max_index);
 
+    //std::cout << "Min index: " << *min_index << std::endl;
+    //std::cout << "Max index: " << *max_index << std::endl;
+
+    //std::cout << "Feature value min: " << feature_values[*min_index] << std::endl;
+    //std::cout << "Feature value max: " << feature_values[*max_index] << std::endl;
+
+    //std::cout << "AH OUI HEIN" << std::endl;
+
+    //int a = dis(gen);
+    //std::cout << "Generated int: " << a << std::endl;
+    //return a;
     return dis(gen);
 }
 
@@ -68,7 +78,7 @@ static std::vector<int> get_number_by_label(std::vector<int> feature_values,
                                             std::function<bool(int, int)> comp)
 {
     std::set<int> unique_labels = std::set<int>(labels.begin(), labels.end());
-    std::vector<int> labels_count = std::vector<int>(unique_labels.size());
+    std::vector<int> labels_count(unique_labels.size() - 1);
     for (size_t i = 0; i < feature_values.size(); ++i)
         if (comp(feature_values[i], threshold))
             labels_count[labels[i]] += 1;
@@ -76,10 +86,10 @@ static std::vector<int> get_number_by_label(std::vector<int> feature_values,
     return labels_count;
 }
 
-DecisionTree::Node::Node(int feature_index_splitted, int threshold, int label, bool is_leaf)
+DecisionTree::Node::Node(int feature_index_split, int threshold, int label, bool is_leaf)
     : left_(nullptr)
     , right_(nullptr)
-    , feature_index_splitted_(feature_index_splitted)
+    , feature_index_split_(feature_index_split)
     , threshold_(threshold)
     , label_(label)
     , is_leaf_(is_leaf)
@@ -88,8 +98,7 @@ DecisionTree::Node::Node(int feature_index_splitted, int threshold, int label, b
 std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
         const std::vector<std::vector<int>>& features,
         const std::vector<int>& labels,
-        const std::function<float(std::vector<int>, std::vector<int>)>& err_function,
-        int n_estimators)
+        const std::function<float(std::vector<int>)>& err_function)
 {
 
     float g_err = 1;
@@ -103,8 +112,7 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
     std::vector<int> g_r_split_class;
     for (size_t f_index = 0; f_index < features.size(); ++f_index)
     {
-        int split_value = get_split_value(features[f_index], labels);
-
+        int split_value = get_split_value(features[f_index]);
         auto left_split_class = get_number_by_label(features[f_index],
                                                     labels, split_value,
                                                     [](int a, int b) { return a < b; });
@@ -113,10 +121,10 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                     labels, split_value,
                                                     [](int a, int b) { return a >= b; });
 
-        float err_left = err_function(left_split_class, labels);
-        float err_right = err_function(right_split_class, labels);
-        float total_err = ((left_split_class.size() / features[f_index].size()) * err_left)
-                          + ((right_split_class.size() / features[f_index].size()) * err_right);
+        float err_left = err_function(left_split_class);
+        float err_right = err_function(right_split_class);
+        float total_err = ((get_number_of_elems(left_split_class) / features[f_index].size()) * err_left)
+                          + ((get_number_of_elems(right_split_class) / features[f_index].size()) * err_right);
         if (total_err < g_err)
         {
             g_err = total_err;
@@ -143,6 +151,11 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
     auto right_labels = update_labels(features, labels, g_split_index, g_split_value,
                                     [](int a, int b) { return a >= b; });
 
+
+    std::cout << "End of feature split: " << std::endl
+              << "g_split_index: " << g_split_index << " | g_split_value: " << g_split_value
+              << " | g_left_error: " << g_left_error << " | g_right_error: " << g_right_error << std::endl;
+
     if (g_left_error == 0)
     {
         size_t label_index = get_label_index(g_l_split_class);
@@ -150,7 +163,7 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                            label_index, true);
     }
     else
-        node->left_ = build_node(left_features, left_labels, err_function, n_estimators);
+        node->left_ = build_node(left_features, left_labels, err_function);
 
     if (g_right_error == 0)
     {
@@ -159,15 +172,14 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                             label_index, true);
     }
     else
-        node->right_ = build_node(right_features, right_labels, err_function, n_estimators);
+        node->right_ = build_node(right_features, right_labels, err_function);
 
     return node;
 }
 
 DecisionTree::DecisionTree(const std::vector<std::vector<int>>& features,
                            const std::vector<int>& labels,
-                           const std::function<float(std::vector<int>, std::vector<int>)>& err_function,
-                           int n_estimators)
+                           const std::function<float(std::vector<int>)>& err_function)
 {
-    this->root_ = build_node(features, labels, err_function, n_estimators);
+    this->root_ = build_node(features, labels, err_function);
 }

@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 PROJECT(DistributedRF CXX)
-set(CMAKE_CXXFLAGS "-Wall -Werror -Wextra -pedantic -std=c++17")
+set(CMAKE_CXX_FLAGS "-Wall -Werror -Wextra -pedantic -std=c++17 -g")
 
 find_package(MPI REQUIRED)
 
@@ -11,6 +11,8 @@ set(
     src/distributed_rf.cc
     src/error_functions.cc
     src/tree.cc
+    src/utils.cc
+
     src/main.cc
 )
 
