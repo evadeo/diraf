@@ -1,7 +1,8 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.9)
 
 PROJECT(DistributedRF CXX)
 set(CMAKE_CXX_FLAGS "-Wall -Werror -Wextra -pedantic -std=c++17 -g")
+set(CMAKE_CXX_COMPILER "mpicxx")
 
 find_package(MPI REQUIRED)
 

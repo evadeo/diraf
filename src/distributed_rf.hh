@@ -9,12 +9,14 @@
 class DistributedRF
 {
     public:
-        DistributedRF(int n_estimators = 10, const std::string& criterion = "mse", int max_depth = 10, int max_features = -1);
+   DistributedRF(int n_estimators = 10, const std::string& criterion = "mse", int max_depth = 10, int max_features = -1, bool distributed = false);
 
         //DistributedRF(const DistributedRF& drf) = default;
 
         ~DistributedRF();
         void fit(const std::vector<std::vector<int>>& features, const std::vector<int>& labels);
+        void distributed_fit(const std::vector<std::vector<int>>& features,
+			     const std::vector<int>& labels);
         void predict();
 
     private:

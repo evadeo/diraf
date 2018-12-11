@@ -1,27 +1,56 @@
 #include "distributed_rf.hh"
 
 DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int max_depth,
-                             int max_features)
-    : n_estimators_(n_estimators)
-    , criterion_(criterion)
+                             int max_features, bool distributed)
+    : criterion_(criterion)
     , max_depth_(max_depth)
     , max_features_(max_features)
-    , trees_(n_estimators)
 {
-/*
-    MPI_Init(nullptr, nullptr);
+   if (!distributed)
+   {
+      n_estimators_ = n_estimators;
+      criterion_ = std::string(criterion);
+      trees_ = std::vector<DecisionTree>(n_estimators_);
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
-    MPI_Comm_size(MPI_COMM_WORLD, &size_);
-*/
+   }
+   else
+   {
+      MPI_Init(nullptr, nullptr);
+      MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
+      MPI_Comm_size(MPI_COMM_WORLD, &size_);
+
+      int criterion_size;
+      char* criterion_str;
+      if (rank_ == 0)
+      {
+	 n_estimators_ = n_estimators / size_;
+	 criterion_size = criterion_.size();
+      }
+
+      MPI_Bcast(&n_estimators_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&max_depth_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&max_features_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&criterion_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+      criterion_str = (char*)calloc(1, criterion_size + 1);
+      if (rank_ == 0)
+	 std::copy(criterion.data(), criterion.data() + criterion_size, criterion_str);
+      MPI_Bcast(criterion_str, criterion_size, MPI_CHAR, 0, MPI_COMM_WORLD);
+      criterion_ = std::string(criterion_str);
+      free(criterion_str);
+
+
+      trees_ = std::vector<DecisionTree>(n_estimators_);
+      MPI_Barrier(MPI_COMM_WORLD);
+   }
 }
+
 
 DistributedRF::~DistributedRF()
 {
-/*
     MPI_Finalize();
-*/
 }
+
 
 static std::vector<std::vector<int>> get_random_features(
                                 const std::vector<std::vector<int>>& features,
@@ -51,10 +80,59 @@ static std::vector<std::vector<int>> get_random_features(
 }
 
 
+void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& features_root,
+				    const std::vector<int>& labels_root)
+{
+   int nbFeats, nbValue, nbLabels;
+   std::vector<int> labels;
+   std::vector<std::vector<int>> features;
+   // Broadcast all the data
+   if (rank_ == 0)
+   {
+      nbFeats = features.size();
+      nbValue = features[0].size();
+      nbLabels = labels_root.size();
+      labels = std::vector<int>(labels_root);
+      features = std::vector<std::vector<int>>(features_root);
+   }
+   MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Bcast(&nbValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Bcast(&nbLabels, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+   if (rank_ != 0)
+   {
+      features.reserve(nbFeats);
+      for (int i = 0; i < nbFeats; ++i)
+	 features[i].reserve(nbValue);
+      labels.reserve(nbLabels);
+   }
+   for (int i = 0; i < nbFeats; ++i)
+      MPI_Bcast(features[i].data(), features[i].size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+   MPI_Bcast(labels.data(), labels.size(), MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Barrier(MPI_COMM_WORLD);
+
+
+   // Creating Random Forest
+   for (int i = 0; i < n_estimators_ / size_; ++i)
+   {
+      // On récupère les features random pour cet arbre de décision
+      auto random_features = get_random_features(features, max_features_);
+      auto err_function = get_error_function(criterion_);
+      DecisionTree d_tree(random_features, labels, err_function);
+      trees_.push_back(d_tree); // std_forward or emplace back
+   }
+
+   // Block all process until the next command
+   if (rank_ != 0)
+      MPI_Recv(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+}
+
+
 void DistributedRF::fit(const std::vector<std::vector<int>>& features,
                         const std::vector<int>& labels)
 {
-    
+
     //TODO: ceci est à distibuer.
 
     for (int i = 0; i < n_estimators_; ++i)
@@ -62,8 +140,7 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
         // On récupère les features random pour cet arbre de décision
         auto random_features = get_random_features(features, max_features_);
         auto err_function = get_error_function(criterion_);
-        DecisionTree d_tree(random_features, labels, err_function);
-        trees_.push_back(d_tree);
+        trees_.emplace_back(random_features, labels, err_function);
     }
 }
 
