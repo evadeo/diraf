@@ -23,8 +23,8 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
       char* criterion_str;
       if (rank_ == 0)
       {
-	 n_estimators_ = n_estimators / size_;
-	 criterion_size = criterion_.size();
+         n_estimators_ = n_estimators / size_;
+         criterion_size = criterion_.size();
       }
 
       MPI_Bcast(&n_estimators_, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -34,7 +34,7 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
 
       criterion_str = (char*)calloc(1, criterion_size + 1);
       if (rank_ == 0)
-	 std::copy(criterion.data(), criterion.data() + criterion_size, criterion_str);
+         std::copy(criterion.data(), criterion.data() + criterion_size, criterion_str);
       MPI_Bcast(criterion_str, criterion_size, MPI_CHAR, 0, MPI_COMM_WORLD);
       criterion_ = std::string(criterion_str);
       free(criterion_str);
@@ -42,6 +42,34 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
 
       trees_ = std::vector<DecisionTree>(n_estimators_);
       MPI_Barrier(MPI_COMM_WORLD);
+      if (rank_ != 0)
+         looper();
+   }
+}
+
+void DistributedRF::looper()
+{
+   bool cont = true;
+   while (cont)
+   {
+      enum CallMeMaybe cmm;
+      MPI_Recv(&cmm, 0, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      auto zero = std::vector<int>(0);
+      auto zerozero = std::vector<std::vector<int>>(0);
+      switch (cmm)
+      {
+	 case FIT:
+	    distributed_fit(zerozero, zero);
+	    break;
+
+	 case PREDICT:
+	    distributed_predict(zerozero);
+	    break;
+
+      	 case EXIT:
+	    cont = false;
+	    break;
+      }
    }
 }
 
@@ -94,22 +122,24 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
       nbLabels = labels_root.size();
       labels = std::vector<int>(labels_root);
       features = std::vector<std::vector<int>>(features_root);
+      enum CallMeMaybe cmm = CallMeMaybe::FIT;
+      for (int i = 1; i < size_; ++i)
+         MPI_Send(&cmm, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
    }
+   MPI_Barrier(MPI_COMM_WORLD);
    MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
    MPI_Bcast(&nbValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
    MPI_Bcast(&nbLabels, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
    if (rank_ != 0)
    {
-      features.reserve(nbFeats);
-      for (int i = 0; i < nbFeats; ++i)
-	 features[i].reserve(nbValue);
-      labels.reserve(nbLabels);
+      features = std::vector<std::vector<int>>(nbFeats, std::vector<int>(nbValue));
+      labels = std::vector<int>(nbLabels);
    }
    for (int i = 0; i < nbFeats; ++i)
-      MPI_Bcast(features[i].data(), features[i].size(), MPI_INT, 0, MPI_COMM_WORLD);
+      MPI_Bcast(features[i].data(), nbValue, MPI_INT, 0, MPI_COMM_WORLD);
 
-   MPI_Bcast(labels.data(), labels.size(), MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Bcast(labels.data(), nbLabels, MPI_INT, 0, MPI_COMM_WORLD);
    MPI_Barrier(MPI_COMM_WORLD);
 
 
@@ -147,4 +177,9 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
 void DistributedRF::predict()
 {
 
+}
+
+void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& features)
+{
+   (void)features;
 }
