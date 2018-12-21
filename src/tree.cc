@@ -10,25 +10,14 @@ static int get_split_value(const std::vector<int>& feature_values)
     const auto min_index = std::min_element(feature_values.begin(), feature_values.end());
 
     //TODO: update this
-    //std::cout << "COUCOU" << std::endl;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(*min_index, *max_index);
 
-    //std::cout << "Min index: " << *min_index << std::endl;
-    //std::cout << "Max index: " << *max_index << std::endl;
-
-    //std::cout << "Feature value min: " << feature_values[*min_index] << std::endl;
-    //std::cout << "Feature value max: " << feature_values[*max_index] << std::endl;
-
-    //std::cout << "AH OUI HEIN" << std::endl;
-
-    //int a = dis(gen);
-    //std::cout << "Generated int: " << a << std::endl;
-    //return a;
     return dis(gen);
 }
 
+/*
 static std::vector<std::vector<int>> update_features(
         const std::vector<std::vector<int>>& features,
         int split_feature,
@@ -64,7 +53,7 @@ static std::vector<int> update_labels(
 
     return filtered_labels;
 }
-
+*/
 static ssize_t get_label_index(std::vector<int> labels_count)
 {
     for (size_t i = 0; i < labels_count.size(); ++i)
@@ -77,8 +66,9 @@ static std::vector<int> get_number_by_label(std::vector<int> feature_values,
                                             std::vector<int> labels, int threshold,
                                             std::function<bool(int, int)> comp)
 {
-    std::set<int> unique_labels = std::set<int>(labels.begin(), labels.end());
-    std::vector<int> labels_count(unique_labels.size() - 1);
+    std::set<int> unique_labels(labels.begin(), labels.end());
+    std::vector<int> labels_count(unique_labels.size());
+
     for (size_t i = 0; i < feature_values.size(); ++i)
         if (comp(feature_values[i], threshold))
             labels_count[labels[i]] += 1;
@@ -96,10 +86,14 @@ DecisionTree::Node::Node(int feature_index_split, int threshold, int label, bool
 {}
 
 std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
-        const std::vector<std::vector<int>>& features,
+        std::vector<std::vector<int>> features,
         const std::vector<int>& labels,
+        std::vector<int>& features_index,
         const std::function<float(std::vector<int>)>& err_function)
 {
+
+    if (features.size() == 0)
+        return nullptr;
 
     float g_err = 1;
     size_t g_split_index;
@@ -125,7 +119,7 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
         float err_right = err_function(right_split_class);
         float total_err = ((get_number_of_elems(left_split_class) / features[f_index].size()) * err_left)
                           + ((get_number_of_elems(right_split_class) / features[f_index].size()) * err_right);
-        if (total_err < g_err)
+        if (total_err <= g_err)
         {
             g_err = total_err;
             g_split_index = f_index;
@@ -137,20 +131,12 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
         }
     }
     
-    auto node = std::make_unique<DecisionTree::Node>(g_split_index, g_split_value, 0, false);
+    int real_index = features_index[g_split_index];
+    features_index.erase(features_index.begin() + g_split_index);
+    
+    auto node = std::make_unique<DecisionTree::Node>(real_index, g_split_value, 0, false);
 
-    //TODO: peut-être évité la recréation total d'un vecteur en séparant in place (hint: std::remove_if) /
-    //      retourner une paire des vecteurs (peut être plus compréhensible) /
-    //      4 appels pour faire quasiment les mêmes parcours, peut-être regrouper dans un objet le retour
-    auto left_features = update_features(features, g_split_index, g_split_value,
-                                         [](int a, int b) { return a < b; });
-    auto left_labels = update_labels(features, labels, g_split_index, g_split_value,
-                                     [](int a, int b) { return a < b; });
-    auto right_features = update_features(features, g_split_index, g_split_value,
-                                          [](int a, int b) { return a >= b; });
-    auto right_labels = update_labels(features, labels, g_split_index, g_split_value,
-                                    [](int a, int b) { return a >= b; });
-
+    features.erase(features.begin() + g_split_index);
 
     std::cout << "End of feature split: " << std::endl
               << "g_split_index: " << g_split_index << " | g_split_value: " << g_split_value
@@ -159,11 +145,11 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
     if (g_left_error == 0)
     {
         size_t label_index = get_label_index(g_l_split_class);
-        node->left_ = std::make_unique<DecisionTree::Node>(g_split_index, g_split_value,
+        node->left_ = std::make_unique<DecisionTree::Node>(real_index, g_split_value,
                                                            label_index, true);
     }
     else
-        node->left_ = build_node(left_features, left_labels, err_function);
+        node->left_ = build_node(features, labels, features_index, err_function);
 
     if (g_right_error == 0)
     {
@@ -172,14 +158,15 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                             label_index, true);
     }
     else
-        node->right_ = build_node(right_features, right_labels, err_function);
+        node->right_ = build_node(features, labels, features_index, err_function);
 
     return node;
 }
 
-DecisionTree::DecisionTree(const std::vector<std::vector<int>>& features,
+DecisionTree::DecisionTree(std::vector<std::vector<int>> features,
                            const std::vector<int>& labels,
+                           std::vector<int>& features_index,
                            const std::function<float(std::vector<int>)>& err_function)
 {
-    this->root_ = build_node(features, labels, err_function);
+    this->root_ = build_node(features, labels, features_index, err_function);
 }

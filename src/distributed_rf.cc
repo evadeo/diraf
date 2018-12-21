@@ -1,10 +1,11 @@
 #include "distributed_rf.hh"
 
 DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int max_depth,
-                             int max_features, bool distributed)
+        int max_features, bool distributed)
     : criterion_(criterion)
     , max_depth_(max_depth)
     , max_features_(max_features)
+    , distributed_(distributed)
 {
    if (!distributed)
    {
@@ -76,13 +77,15 @@ void DistributedRF::looper()
 
 DistributedRF::~DistributedRF()
 {
-    MPI_Finalize();
+    if (distributed_)
+        MPI_Finalize();
 }
 
 
 static std::vector<std::vector<int>> get_random_features(
-                                const std::vector<std::vector<int>>& features,
-                                int max_features)
+        const std::vector<std::vector<int>>& features,
+        std::vector<int>& real_indexes,
+        int max_features)
 {
     int m_features = max_features == - 1 ? features.size(): max_features;
 
@@ -94,6 +97,8 @@ static std::vector<std::vector<int>> get_random_features(
     for (int i = 0; i < m_features; ++i)
         if (!features_index.insert(dis(gen)).second)
             --i;
+
+    std::copy(features_index.begin(), features_index.end(), std::back_inserter(real_indexes));
 
     std::cout << "Selected features: ";
     std::vector<std::vector<int>> random_features;
@@ -109,7 +114,7 @@ static std::vector<std::vector<int>> get_random_features(
 
 
 void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& features_root,
-				    const std::vector<int>& labels_root)
+        const std::vector<int>& labels_root)
 {
    int nbFeats, nbValue, nbLabels;
    std::vector<int> labels;
@@ -147,10 +152,10 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
    for (int i = 0; i < n_estimators_ / size_; ++i)
    {
       // On récupère les features random pour cet arbre de décision
-      auto random_features = get_random_features(features, max_features_);
+      std::vector<int> real_indexes;
+      auto random_features = get_random_features(features, real_indexes, max_features_);
       auto err_function = get_error_function(criterion_);
-      DecisionTree d_tree(random_features, labels, err_function);
-      trees_.push_back(d_tree); // std_forward or emplace back
+      trees_.emplace_back(random_features, labels, real_indexes, err_function); // std_forward or emplace back
    }
 
    // Block all process until the next command
@@ -160,7 +165,7 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
 
 
 void DistributedRF::fit(const std::vector<std::vector<int>>& features,
-                        const std::vector<int>& labels)
+        const std::vector<int>& labels)
 {
 
     //TODO: ceci est à distibuer.
@@ -168,9 +173,10 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
     for (int i = 0; i < n_estimators_; ++i)
     {
         // On récupère les features random pour cet arbre de décision
-        auto random_features = get_random_features(features, max_features_);
+        std::vector<int> real_indexes;
+        auto random_features = get_random_features(features, real_indexes, max_features_);
         auto err_function = get_error_function(criterion_);
-        trees_.emplace_back(random_features, labels, err_function);
+        trees_.emplace_back(random_features, labels, real_indexes, err_function);
     }
 }
 

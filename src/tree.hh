@@ -22,8 +22,9 @@ class DecisionTree
 
     public:
         DecisionTree() : root_(nullptr) {}
-        DecisionTree(const std::vector<std::vector<int>>& features,
+        DecisionTree(std::vector<std::vector<int>> features,
                 const std::vector<int>& labels,
+                std::vector<int>& features_index,
                 const std::function<float(std::vector<int>)>& err_function);
         //DecisionTree(DecisionTree&& dt);
         void build_decision_tree(std::vector<std::vector<int>> features,
@@ -31,8 +32,9 @@ class DecisionTree
 
     private:
          std::unique_ptr<DecisionTree::Node> build_node(
-                const std::vector<std::vector<int>>& features,
+                std::vector<std::vector<int>> features,
                 const std::vector<int>& labels,
+                std::vector<int>& features_index,
                 const std::function<float(std::vector<int>)>& err_function);
         
         std::shared_ptr<Node> root_;
