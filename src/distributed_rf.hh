@@ -15,11 +15,12 @@ class DistributedRF
 
         ~DistributedRF();
         void fit(const std::vector<std::vector<int>>& features, const std::vector<int>& labels);
+        std::vector<int> predict(const std::vector<std::vector<int>>& features);
         void distributed_fit(const std::vector<std::vector<int>>& features,
                 const std::vector<int>& labels);
         void predict();
         void looper();
-        void distributed_predict(const std::vector<std::vector<int>>& features);
+        std::vector<int> distributed_predict(const std::vector<std::vector<int>>& features);
 
         enum CallMeMaybe {
             FIT,
@@ -27,6 +28,7 @@ class DistributedRF
             EXIT
         };
     private:
+        int predict_label(const std::vector<int>& elem);
         int n_estimators_;
         std::string criterion_;
         int max_depth_;

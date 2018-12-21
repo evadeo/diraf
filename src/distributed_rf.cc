@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <utility>
 #include "distributed_rf.hh"
 
 DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int max_depth,
@@ -176,16 +178,56 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
         std::vector<int> real_indexes;
         auto random_features = get_random_features(features, real_indexes, max_features_);
         auto err_function = get_error_function(criterion_);
+        std::cout << "Indexes selected for estimator " << i << ": ";
+        for (size_t i = 0; i < real_indexes.size(); ++i)
+            std::cout << real_indexes[i] << " | ";
+        std::cout << std::endl;
         trees_.emplace_back(random_features, labels, real_indexes, err_function);
     }
 }
 
-void DistributedRF::predict()
+static int choose_prediction(const std::vector<int>& predictions)
 {
 
+    std::map<int, int> counts;
+
+    for (int pred : predictions)
+        ++counts[pred];
+
+    const auto max = std::max_element(counts.begin(), counts.end(),
+            [](const auto& p1, const auto& p2) { return p1.second < p2.second; });
+
+    return max->second;
 }
 
-void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& features)
+int DistributedRF::predict_label(const std::vector<int>& elem)
 {
-   (void)features;
+    std::vector<int> predictions;
+    for (const auto& node : trees_)
+        predictions.push_back(node.predict(elem));
+
+    int pred = choose_prediction(predictions);
+    
+    return pred;
+}
+
+std::vector<int> DistributedRF::predict(const std::vector<std::vector<int>>& features)
+{
+    std::vector<int> predictions;
+    for (size_t i = 0; i < features.size(); ++i)
+    {
+        int pred = this->predict_label(features[i]);
+        predictions.push_back(pred);
+    }
+    return predictions;
+}
+
+std::vector<int> DistributedRF::distributed_predict(const std::vector<std::vector<int>>& features)
+{
+    std::vector<int> predictions;
+    for (size_t i = 0; i < features.size(); ++i)
+    {
+        
+    }
+    return predictions;
 }

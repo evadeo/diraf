@@ -85,10 +85,10 @@ DecisionTree::Node::Node(int feature_index_split, int threshold, int label, bool
     , is_leaf_(is_leaf)
 {}
 
-std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
+std::shared_ptr<DecisionTree::Node> DecisionTree::build_node(
         std::vector<std::vector<int>> features,
         const std::vector<int>& labels,
-        std::vector<int>& features_index,
+        std::vector<int> features_index,
         const std::function<float(std::vector<int>)>& err_function)
 {
 
@@ -149,7 +149,9 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                            label_index, true);
     }
     else
+    {
         node->left_ = build_node(features, labels, features_index, err_function);
+    }
 
     if (g_right_error == 0)
     {
@@ -158,14 +160,31 @@ std::unique_ptr<DecisionTree::Node> DecisionTree::build_node(
                                                             label_index, true);
     }
     else
+    {
         node->right_ = build_node(features, labels, features_index, err_function);
+    }
 
     return node;
 }
 
+int DecisionTree::predict(const std::vector<int>& elem) const
+{
+    auto root = root_;
+    while (!root->is_leaf_)
+    {
+        bool left = elem[root->feature_index_split_] < root->threshold_;
+        if (left)
+            root = root->left_;
+        else
+            root = root->right_;
+    }
+    return root->label_;
+}
+
+
 DecisionTree::DecisionTree(std::vector<std::vector<int>> features,
                            const std::vector<int>& labels,
-                           std::vector<int>& features_index,
+                           std::vector<int> features_index,
                            const std::function<float(std::vector<int>)>& err_function)
 {
     this->root_ = build_node(features, labels, features_index, err_function);
