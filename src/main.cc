@@ -37,6 +37,4 @@ int main(int argc, char *argv[])
     {
         std::cout << pred << " | " << std::endl;
     }
-    //int res = drf.fit();
-    //std::cout << "Got res: " << res << std::endl;
 }

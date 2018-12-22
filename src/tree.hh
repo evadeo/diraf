@@ -5,6 +5,7 @@
 #include <random>
 #include <set>
 #include <vector>
+#include "utils.hh"
 
 class DecisionTree
 {
@@ -25,8 +26,7 @@ class DecisionTree
         DecisionTree(std::vector<std::vector<int>> features,
                 const std::vector<int>& labels,
                 std::vector<int> features_index,
-                const std::function<float(std::vector<int>)>& err_function);
-        //DecisionTree(DecisionTree&& dt);
+                const err_func& err_function);
         void build_decision_tree(std::vector<std::vector<int>> features,
                                  std::vector<int> labels);
 
@@ -37,7 +37,7 @@ class DecisionTree
                 std::vector<std::vector<int>> features,
                 const std::vector<int>& labels,
                 std::vector<int> features_index,
-                const std::function<float(std::vector<int>)>& err_function);
+                const err_func& err_function);
         
         std::shared_ptr<Node> root_;
 };

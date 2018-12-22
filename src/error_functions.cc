@@ -24,3 +24,20 @@ float gini_error(std::vector<int> count_label_vector)
 
     return gini_err;
 }
+
+Error total_gini_error(const std::vector<int>& features, const std::vector<int>& labels,
+        int split_value, size_t split_index)
+{
+    auto left_split_count = get_count_by_label(features,
+            labels, split_value, [](int a, int b) { return a < b; });
+
+    auto right_split_count = get_count_by_label(features,
+            labels, split_value, [](int a, int b) { return a >= b; });
+
+    float err_left = gini_error(left_split_count);
+    float err_right = gini_error(right_split_count);
+    float total_err = ((get_number_of_elems(left_split_count) / features.size()) * err_left)
+        + ((get_number_of_elems(right_split_count) / features.size()) * err_right);
+
+    return Error(split_value, split_index, err_left, err_right, total_err);
+}
