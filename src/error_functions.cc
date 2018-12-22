@@ -20,7 +20,11 @@ float gini_error(std::vector<int> count_label_vector)
 
     float gini_err = 1;
     for (size_t i = 0; i < count_label_vector.size(); ++i)
-        gini_err -= std::pow((count_label_vector[i] / elem_count), 2);
+    {
+        float frac = (float)count_label_vector[i] / (float)elem_count;
+        float square = std::pow(frac, 2);
+        gini_err -= square;
+    }
 
     return gini_err;
 }
@@ -36,8 +40,12 @@ Error total_gini_error(const std::vector<int>& features, const std::vector<int>&
 
     float err_left = gini_error(left_split_count);
     float err_right = gini_error(right_split_count);
-    float total_err = ((get_number_of_elems(left_split_count) / features.size()) * err_left)
-        + ((get_number_of_elems(right_split_count) / features.size()) * err_right);
+
+    float left = (float)get_number_of_elems(left_split_count) / (float)features.size();
+    float tot_left = left * err_left;
+    float right = (float)get_number_of_elems(right_split_count) / (float)features.size();
+    float tot_right = right * err_right;
+    float total_err = tot_left + tot_right;
 
     return Error(split_value, split_index, err_left, err_right, total_err);
 }

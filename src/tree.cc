@@ -36,14 +36,11 @@ std::shared_ptr<DecisionTree::Node> DecisionTree::build_node(
         std::vector<int> features_index,
         const err_func& err_function)
 {
-
-    if (features.size() == 0)
-        return nullptr;
-
     Error g_err;
-    for (size_t f_index = 0; f_index < features.size(); ++f_index)
+    for (size_t f_index = 0; f_index < features[0].size(); ++f_index)
     {
-        Error err = find_best_split(features[f_index], labels, f_index, err_function);
+        auto selected_feature = build_feature_vector(features, f_index);
+        Error err = find_best_split(selected_feature, labels, f_index, err_function);
         if (err < g_err)
             g_err = err;
     }
@@ -51,9 +48,10 @@ std::shared_ptr<DecisionTree::Node> DecisionTree::build_node(
     int real_index = features_index[g_err.split_index_];
     features_index.erase(features_index.begin() + g_err.split_index_);
     
-    auto node = std::make_unique<DecisionTree::Node>(real_index, g_err.split_value_, 0, false);
+    auto node = std::make_shared<DecisionTree::Node>(real_index, g_err.split_value_, 0, false);
 
-    features.erase(features.begin() + g_err.split_index_);
+    //for (size_t i = 0; i < features.size(); ++i)
+     //   features[i].erase(features[i].begin() + g_err.split_index_);
 
     std::cout << "End of feature split: " << std::endl
               << "g_split_index: " << g_err.split_index_ << " | g_split_value: " << g_err.split_value_
@@ -61,22 +59,40 @@ std::shared_ptr<DecisionTree::Node> DecisionTree::build_node(
 
     if (g_err.err_left_ == 0)
     {
-        int label = get_label_for_left_split(features[g_err.split_index_], labels, g_err.split_value_);
-        node->left_ = std::make_unique<DecisionTree::Node>(real_index, g_err.split_value_, label, true);
+        int label = get_label_for_left_split(features, labels, g_err.split_value_, g_err.split_index_);
+        node->left_ = std::make_shared<DecisionTree::Node>(real_index, g_err.split_value_, label, true);
     }
     else
     {
-        node->left_ = build_node(features, labels, features_index, err_function);
+        auto left_features = build_split_feature_left(features, g_err.split_value_, g_err.split_index_);
+        auto left_labels = build_split_labels_left(features, labels, g_err.split_value_, g_err.split_index_);
+        
+        //TODO: EMERGENCY EXIT, THIS NEED TO BE CHANGED
+        if (features_index.size() == 0 || left_features.size() == 0)
+            node->left_ = std::make_shared<DecisionTree::Node>(0, 0, labels[0], true);
+        else
+        {
+           node->left_ = build_node(left_features, left_labels, features_index, err_function);
+        }
     }
 
     if (g_err.err_right_ == 0)
     {
-        int label = get_label_for_right_split(features[g_err.split_index_], labels, g_err.split_value_);
-        node->right_ = std::make_unique<DecisionTree::Node>(real_index, g_err.split_value_, label, true);
+        int label = get_label_for_right_split(features, labels, g_err.split_value_, g_err.split_index_);
+        node->right_ = std::make_shared<DecisionTree::Node>(real_index, g_err.split_value_, label, true);
     }
     else
     {
-        node->right_ = build_node(features, labels, features_index, err_function);
+        auto right_features = build_split_feature_right(features, g_err.split_value_, g_err.split_index_);
+        auto right_labels = build_split_labels_right(features, labels, g_err.split_value_, g_err.split_index_);
+            
+        //TODO: EMERGENCY EXIT, THIS NEED TO BE CHANGED
+        if (features_index.size() == 0 || right_features.size() == 0)
+            node->right_ = std::make_shared<DecisionTree::Node>(0, 0, labels[0], true);
+        else
+        {
+           node->right_ = build_node(right_features, right_labels, features_index, err_function);
+        }
     }
 
     return node;

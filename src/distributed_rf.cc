@@ -13,8 +13,7 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
    {
       n_estimators_ = n_estimators;
       criterion_ = std::string(criterion);
-      trees_ = std::vector<DecisionTree>(n_estimators_);
-
+      trees_ = std::vector<DecisionTree>();
    }
    else
    {
@@ -43,7 +42,7 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
       free(criterion_str);
 
 
-      trees_ = std::vector<DecisionTree>(n_estimators_);
+      trees_ = std::vector<DecisionTree>();
       MPI_Barrier(MPI_COMM_WORLD);
       if (rank_ != 0)
          looper();
@@ -89,11 +88,11 @@ static std::vector<std::vector<int>> get_random_features(
         std::vector<int>& real_indexes,
         int max_features)
 {
-    int m_features = max_features == - 1 ? features.size(): max_features;
+    int m_features = max_features == - 1 ? features[0].size(): max_features;
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, features.size() - 1);
+    std::uniform_int_distribution<> dis(0, features[0].size() - 1);
 
     std::set<int> features_index;
     for (int i = 0; i < m_features; ++i)
@@ -103,14 +102,13 @@ static std::vector<std::vector<int>> get_random_features(
     std::copy(features_index.begin(), features_index.end(), std::back_inserter(real_indexes));
 
     std::cout << "Selected features: ";
-    std::vector<std::vector<int>> random_features;
     for (auto f_index : features_index)
-    {
-        //debug
         std::cout << f_index << " | ";
-        random_features.push_back(features[f_index]);
-    }
     std::cout << std::endl;
+    std::vector<std::vector<int>> random_features(features.size());
+    for (size_t i = 0; i < features.size(); ++i)
+        for (auto f_index : features_index)
+            random_features[i].push_back(features[i][f_index]);
     return random_features;
 }
 
@@ -188,7 +186,6 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
 
 static int choose_prediction(const std::vector<int>& predictions)
 {
-
     std::map<int, int> counts;
 
     for (int pred : predictions)
@@ -197,7 +194,7 @@ static int choose_prediction(const std::vector<int>& predictions)
     const auto max = std::max_element(counts.begin(), counts.end(),
             [](const auto& p1, const auto& p2) { return p1.second < p2.second; });
 
-    return max->second;
+    return max->first;
 }
 
 int DistributedRF::predict_label(const std::vector<int>& elem)
@@ -214,6 +211,8 @@ int DistributedRF::predict_label(const std::vector<int>& elem)
 std::vector<int> DistributedRF::predict(const std::vector<std::vector<int>>& features)
 {
     std::vector<int> predictions;
+
+    std::cout << "STARTING PREDICT" << std::endl;
     for (size_t i = 0; i < features.size(); ++i)
     {
         int pred = this->predict_label(features[i]);
