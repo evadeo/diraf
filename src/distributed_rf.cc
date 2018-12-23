@@ -82,6 +82,7 @@ void DistributedRF::looper()
             case EXIT:
                 cont = false;
                 std::cout << "ON QUITTE LE LOOPER POUR LE RANK: " << rank_ << std::endl;
+		std::exit(0);
                 break;
         }
     }
@@ -281,7 +282,7 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
         std::vector<std::vector<int>> all_preds(size_, std::vector<int>(predictions.size()));
         all_preds[0] = predictions;
         for (int i = 1; i < size_; ++i)
-            MPI_Recv(&all_preds[i], predictions.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	  MPI_Recv(all_preds[i].data(), predictions.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         for (size_t i = 0; i < all_preds[0].size(); ++i)
         {
