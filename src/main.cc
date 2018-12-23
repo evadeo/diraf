@@ -22,8 +22,8 @@ int main(int argc, char *argv[])
 
     std::vector<int> labels { 0, 1, 2, 3, 4 };
 
-    auto drf = DistributedRF(10, "gini", 10, 3);
-    drf.fit(features, labels);
+    auto drf = DistributedRF(10, "gini", 10, 3, true);
+    drf.distributed_fit(features, labels);
 
     std::cout << "FINISHED FIT" << std::endl;
 
@@ -33,8 +33,9 @@ int main(int argc, char *argv[])
     test.push_back(t);
     test.push_back(u);
 
-    auto preds = drf.predict(test);
+    drf.distributed_predict(test);
 
+    auto preds = drf.get_predictions(); 
     for (auto pred : preds)
         std::cout << pred << " | ";
     std::cout << std::endl;

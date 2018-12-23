@@ -20,7 +20,8 @@ class DistributedRF
                 const std::vector<int>& labels);
         void predict();
         void looper();
-        std::vector<int> distributed_predict(const std::vector<std::vector<int>>& features);
+        void distributed_predict(const std::vector<std::vector<int>>& features);
+        std::vector<int> get_predictions() const;
 
         enum CallMeMaybe {
             FIT,
@@ -35,6 +36,7 @@ class DistributedRF
         int max_features_;
         bool distributed_;
         std::vector<DecisionTree> trees_;
+        std::vector<int> predictions_;
 
         int rank_;
         int size_;
