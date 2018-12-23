@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <map>
 #include <string>
 #include "mpi.h"
 #include "tree.hh"
