@@ -52,9 +52,6 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
         trees_ = std::vector<DecisionTree>();
         predictions_ = std::vector<int>();
 
-        ///Synchronize all instances
-        MPI_Barrier(MPI_COMM_WORLD);
-
         if (rank_ != 0)
         {
             ///If we are not the master node, go to the looper and wait for next instruction.
@@ -171,8 +168,6 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
             MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
         }
     }
-    ///Wait that all instances are now in this function
-    MPI_Barrier(MPI_COMM_WORLD);
     ///Broadcast all the data
     MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&nbValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -189,9 +184,6 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
     for (int i = 0; i < nbFeats; ++i)
         MPI_Bcast(features[i].data(), nbValue, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(labels.data(), nbLabels, MPI_INT, 0, MPI_COMM_WORLD);
-
-    ///Synchronyze all instances
-    MPI_Barrier(MPI_COMM_WORLD);
 
     ///Executing the fit method for all instances that will build the `trees_` attributed for each instance.
     this->fit(features, labels);
@@ -271,8 +263,6 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
             MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
         }
     }
-    ///Wait all instances to be at this point
-    MPI_Barrier(MPI_COMM_WORLD);
 
     ///Broadcast the values
     MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -282,8 +272,6 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
         features = std::vector<std::vector<int>>(nbFeats, std::vector<int>(nbValue));
     for (int i = 0; i < nbFeats; ++i)
         MPI_Bcast(features[i].data(), nbValue, MPI_INT, 0, MPI_COMM_WORLD);
-    ///Synchronize
-    MPI_Barrier(MPI_COMM_WORLD);
 
     ///Get the predictions for the elements on all instances
     std::vector<int> predictions = this->predict(features);
