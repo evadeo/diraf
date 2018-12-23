@@ -21,7 +21,8 @@ sh$ cmake ..
 sh$ make
 ```
 
-This will build two binaries:
+This will build two binaries and a library:
+- lib_diraf: the library to use our Distributed Random Forest
 - distributed_rf: the main binary
 - test_diraf: the test binary
 
@@ -29,6 +30,12 @@ This will build two binaries:
 In order to launch the project, you can type the following command, in the `build` directory:
 ```
 sh$ mpirun ./distributed_rf
+```
+
+or if you want multiple processes (for example 4):
+
+```
+sh$ mpirun -n 4 ./distributed_rf
 ```
 
 ### Lauching the test binary
@@ -44,4 +51,4 @@ sh$ mpirun ./test_diraf
 * **Arthur NAEGELY** - [Arthur-NA](https://github.com/Arthur-NA)
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the GPL License - see the [LICENSE](LICENSE) file for details
