@@ -9,15 +9,16 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
     , max_features_(max_features)
     , distributed_(distributed)
 {
+    ///If the program is not distributed we only need to assign a few variables.
     if (!distributed)
     {
         n_estimators_ = n_estimators;
-        criterion_ = std::string(criterion);
         trees_ = std::vector<DecisionTree>();
         predictions_ = std::vector<int>();
     }
     else
     {
+        ///Start the distributed environment
         MPI_Init(nullptr, nullptr);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
         MPI_Comm_size(MPI_COMM_WORLD, &size_);
@@ -26,35 +27,39 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
         char* criterion_str;
         if (rank_ == 0)
         {
+            ///Compute the number of trees for each instance
             n_estimators_ = n_estimators / size_;
             criterion_size = criterion_.size();
         }
 
-        std::cout << "ON BROADCAST N_ESTIMATORS POUR LE RANK: " << rank_ << std::endl;
+        ///Broadcasting all the the data to all the instance
         MPI_Bcast(&n_estimators_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        std::cout << "ON BROADCAST MAX_DEPTH POUR LE RANK: " << rank_ << std::endl;
         MPI_Bcast(&max_depth_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        std::cout << "ON BROADCAST MAX_FEATURES POUR LE RANK: " << rank_ << std::endl;
         MPI_Bcast(&max_features_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        std::cout << "ON BROADCAST CRITERION SIZE POUR LE RANK: " << rank_ << std::endl;
         MPI_Bcast(&criterion_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
+        ///Broadcast criterion string
         criterion_str = (char*)calloc(1, criterion_size + 1);
         if (rank_ == 0)
             std::copy(criterion.data(), criterion.data() + criterion_size, criterion_str);
         MPI_Bcast(criterion_str, criterion_size, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+        ///Assign the criterion string to the attribute for each instance
         criterion_ = std::string(criterion_str);
         free(criterion_str);
 
+        ///Instanciate the vectors
         trees_ = std::vector<DecisionTree>();
         predictions_ = std::vector<int>();
+
+        ///Synchronize all instances
         MPI_Barrier(MPI_COMM_WORLD);
-        //std::cout << "ON A TERMINE LA FIN DU CONSTRUCTEUR POUR LE RANK: " << rank_ << std::endl;
+
         if (rank_ != 0)
         {
-            //std::cout << "ON VA ALLER DANS LE LOOPER POUR LA RANK: " << rank_ << std::endl;
+            ///If we are not the master node, go to the looper and wait for next instruction.
             looper();
-            std::cout << "ON A FINI LE LOOPER POUR LE RANK: " << rank_ << std::endl;
+            ///Once it is finished, the master node will have finished the execution, so we call mpi_finalize on each other instances
             MPI_Finalize();
         }
     }
@@ -63,13 +68,15 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
 void DistributedRF::looper()
 {
     bool cont = true;
-    std::cout << "ON EST DANS UN LOOPER POUR LE RANK: " << rank_ << std::endl;
+    ///While we do not receive the EXIT command
     while (cont)
     {
         enum CallMeMaybe cmm;
+        ///Receive the next instruction from master node
         MPI_Recv(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         auto zero = std::vector<int>(0);
         auto zerozero = std::vector<std::vector<int>>(0);
+        ///Call the right function according to the enum
         switch (cmm)
         {
             case FIT:
@@ -82,8 +89,6 @@ void DistributedRF::looper()
 
             case EXIT:
                 cont = false;
-                std::cout << "ON QUITTE LE LOOPER POUR LE RANK: " << rank_ << std::endl;
-                //std::exit(0);
                 break;
         }
     }
@@ -92,16 +97,19 @@ void DistributedRF::looper()
 
 DistributedRF::~DistributedRF()
 {
+    ///If we weren't launch in distributed mode, we do not want to call mpi_finalize
     if (distributed_)
     {
+        ///The destructor will first be called by the master node because all the other nodes are in the looper.
         if (rank_ == 0)
         {
+            ///Send to all nodes the EXIT command.
             enum CallMeMaybe cmm = CallMeMaybe::EXIT;
             for (int i = 1; i < size_; ++i)
             {
                 MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
             }
-
+            ///Call finalize for the master node.
             MPI_Finalize();
 
         }
@@ -127,10 +135,6 @@ static std::vector<std::vector<int>> get_random_features(
 
     std::copy(features_index.begin(), features_index.end(), std::back_inserter(real_indexes));
 
-    std::cout << "Selected features: ";
-    for (auto f_index : features_index)
-        std::cout << f_index << " | ";
-    std::cout << std::endl;
     std::vector<std::vector<int>> random_features(features.size());
     for (size_t i = 0; i < features.size(); ++i)
         for (auto f_index : features_index)
@@ -142,64 +146,57 @@ static std::vector<std::vector<int>> get_random_features(
 void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& features_root,
         const std::vector<int>& labels_root)
 {
+    ///Check if we did not call mpi_finalized first
     int flag;
     MPI_Finalized(&flag);
     if (flag)
         return;
+
     int nbFeats, nbValue, nbLabels;
     std::vector<int> labels;
     std::vector<std::vector<int>> features;
-    // Broadcast all the data
     if (rank_ == 0)
     {
+        ///Initialize the values to broadcast
         nbFeats = features_root.size();
-        //std::cout << "TOTOTOTOT" << std::endl;
-        //std::cout << "FEATURES SIZE" << nbFeats << std::endl;
         nbValue = features_root[0].size();
         nbLabels = labels_root.size();
         labels = std::vector<int>(labels_root);
         features = std::vector<std::vector<int>>(features_root);
+
+        ///Send to all instances to go to the distributed FIT function
         enum CallMeMaybe cmm = CallMeMaybe::FIT;
         for (int i = 1; i < size_; ++i)
         {
-            std::cout << "ON ENVOIE L'ENUM AU RANK: " << i << std::endl;
             MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
         }
     }
+    ///Wait that all instances are now in this function
     MPI_Barrier(MPI_COMM_WORLD);
+    ///Broadcast all the data
     MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&nbValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&nbLabels, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (rank_ != 0)
     {
+        ///Build the vectors to have enough space when receiving the broadcasted data
         features = std::vector<std::vector<int>>(nbFeats, std::vector<int>(nbValue));
         labels = std::vector<int>(nbLabels);
     }
+
+    ///Broadcast all the elemnts features to all the instances.
     for (int i = 0; i < nbFeats; ++i)
         MPI_Bcast(features[i].data(), nbValue, MPI_INT, 0, MPI_COMM_WORLD);
-
     MPI_Bcast(labels.data(), nbLabels, MPI_INT, 0, MPI_COMM_WORLD);
+
+    ///Synchronyze all instances
     MPI_Barrier(MPI_COMM_WORLD);
 
-
-    std::cout << "ON EXECUTE LE FIT POUR LE RANK: " << rank_ << std::endl;
-
+    ///Executing the fit method for all instances that will build the `trees_` attributed for each instance.
     this->fit(features, labels);
 
-    // Creating Random Forest
-    /*for (int i = 0; i < n_estimators_ / size_; ++i)
-      {
-    // On récupère les features random pour cet arbre de décision
-    std::vector<int> real_indexes;
-    auto random_features = get_random_features(features, real_indexes, max_features_);
-    auto err_function = get_error_function(criterion_);
-    trees_.emplace_back(random_features, labels, real_indexes, err_function);
-    }*/
-
-    // Block all process until the next command
-    //if (rank_ != 0)
-    //MPI_Recv(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    ///The master node will return to the main program and all the other instances will go back to the looper function.
 }
 
 
@@ -212,10 +209,6 @@ void DistributedRF::fit(const std::vector<std::vector<int>>& features,
         std::vector<int> real_indexes;
         auto random_features = get_random_features(features, real_indexes, max_features_);
         auto err_function = get_error_function(criterion_);
-        std::cout << "Indexes selected for estimator " << i << ": ";
-        for (size_t i = 0; i < real_indexes.size(); ++i)
-            std::cout << real_indexes[i] << " | ";
-        std::cout << std::endl;
         trees_.emplace_back(random_features, labels, real_indexes, err_function);
     }
 }
@@ -248,7 +241,6 @@ std::vector<int> DistributedRF::predict(const std::vector<std::vector<int>>& fea
 {
     std::vector<int> predictions;
 
-    std::cout << "STARTING PREDICT FOR RANK: " << rank_ << std::endl;
     for (size_t i = 0; i < features.size(); ++i)
     {
         int pred = this->predict_label(features[i]);
@@ -259,26 +251,30 @@ std::vector<int> DistributedRF::predict(const std::vector<std::vector<int>>& fea
 
 void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& features_root)
 {
+    ///Check if we did not call mpi_finalized first
     int flag;
     MPI_Finalized(&flag);
     if (flag)
         return;
     int nbFeats, nbValue;
     std::vector<std::vector<int>> features;
-    // Broadcast all the data
     if (rank_ == 0)
     {
+        ///Initialize the values to broadcast
         nbFeats = features_root.size();
         nbValue = features_root[0].size();
         features = std::vector<std::vector<int>>(features_root);
+        ///Send to all instances to go to the distributed FIT function
         enum CallMeMaybe cmm = CallMeMaybe::PREDICT;
         for (int i = 1; i < size_; ++i)
         {
-            std::cout << "ON ENVOIE L'ENUM AU RANK: " << i << std::endl;
             MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
         }
     }
+    ///Wait all instances to be at this point
     MPI_Barrier(MPI_COMM_WORLD);
+
+    ///Broadcast the values
     MPI_Bcast(&nbFeats, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&nbValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -286,17 +282,24 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
         features = std::vector<std::vector<int>>(nbFeats, std::vector<int>(nbValue));
     for (int i = 0; i < nbFeats; ++i)
         MPI_Bcast(features[i].data(), nbValue, MPI_INT, 0, MPI_COMM_WORLD);
+    ///Synchronize
     MPI_Barrier(MPI_COMM_WORLD);
 
+    ///Get the predictions for the elements on all instances
     std::vector<int> predictions = this->predict(features);
 
+    ///Retrieving all information on master node
     if (rank_ == 0)
     {
+        ///Vector that will contain all the predictions of each instance
         std::vector<std::vector<int>> all_preds(size_, std::vector<int>(predictions.size()));
+        ///The first vector will be the predictions made by the master node
         all_preds[0] = predictions;
+        ///Receive all the predictions from all instances
         for (int i = 1; i < size_; ++i)
             MPI_Recv(all_preds[i].data(), predictions.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
+        ///Select the most frequent output class for each element
         for (size_t i = 0; i < all_preds[0].size(); ++i)
         {
             std::vector<int> pred_elem;
@@ -306,14 +309,19 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
         }
     }
     else
+    {
+        ///If we are not the master node, we send our predictions to it.
         MPI_Send(predictions.data(), predictions.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
 }
 
 std::vector<int> DistributedRF::get_predictions() const
 {
+    ///Check if we did not call mpi_finalized first
     int flag;
     MPI_Finalized(&flag);
     if (flag)
         return std::vector<int>();
+    ///Returns the previously built predictions
     return predictions_;
 }
