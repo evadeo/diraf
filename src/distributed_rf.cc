@@ -55,6 +55,7 @@ DistributedRF::DistributedRF(int n_estimators, const std::string& criterion, int
             //std::cout << "ON VA ALLER DANS LE LOOPER POUR LA RANK: " << rank_ << std::endl;
             looper();
             std::cout << "ON A FINI LE LOOPER POUR LE RANK: " << rank_ << std::endl;
+            MPI_Finalize();
         }
     }
 }
@@ -82,7 +83,7 @@ void DistributedRF::looper()
             case EXIT:
                 cont = false;
                 std::cout << "ON QUITTE LE LOOPER POUR LE RANK: " << rank_ << std::endl;
-		std::exit(0);
+                //std::exit(0);
                 break;
         }
     }
@@ -93,13 +94,17 @@ DistributedRF::~DistributedRF()
 {
     if (distributed_)
     {
-        enum CallMeMaybe cmm = CallMeMaybe::EXIT;
-        for (int i = 1; i < size_; ++i)
+        if (rank_ == 0)
         {
-            MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
-        }
+            enum CallMeMaybe cmm = CallMeMaybe::EXIT;
+            for (int i = 1; i < size_; ++i)
+            {
+                MPI_Send(&cmm, sizeof(enum CallMeMaybe), MPI_BYTE, i, 0, MPI_COMM_WORLD);
+            }
 
-        MPI_Finalize();
+            MPI_Finalize();
+
+        }
     }
 }
 
@@ -137,6 +142,10 @@ static std::vector<std::vector<int>> get_random_features(
 void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& features_root,
         const std::vector<int>& labels_root)
 {
+    int flag;
+    MPI_Finalized(&flag);
+    if (flag)
+        return;
     int nbFeats, nbValue, nbLabels;
     std::vector<int> labels;
     std::vector<std::vector<int>> features;
@@ -190,7 +199,7 @@ void DistributedRF::distributed_fit(const std::vector<std::vector<int>>& feature
 
     // Block all process until the next command
     //if (rank_ != 0)
-        //MPI_Recv(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    //MPI_Recv(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
 
@@ -250,6 +259,10 @@ std::vector<int> DistributedRF::predict(const std::vector<std::vector<int>>& fea
 
 void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& features_root)
 {
+    int flag;
+    MPI_Finalized(&flag);
+    if (flag)
+        return;
     int nbFeats, nbValue;
     std::vector<std::vector<int>> features;
     // Broadcast all the data
@@ -276,13 +289,13 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
     MPI_Barrier(MPI_COMM_WORLD);
 
     std::vector<int> predictions = this->predict(features);
-    
+
     if (rank_ == 0)
     {
         std::vector<std::vector<int>> all_preds(size_, std::vector<int>(predictions.size()));
         all_preds[0] = predictions;
         for (int i = 1; i < size_; ++i)
-	  MPI_Recv(all_preds[i].data(), predictions.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(all_preds[i].data(), predictions.size(), MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         for (size_t i = 0; i < all_preds[0].size(); ++i)
         {
@@ -298,5 +311,9 @@ void DistributedRF::distributed_predict(const std::vector<std::vector<int>>& fea
 
 std::vector<int> DistributedRF::get_predictions() const
 {
+    int flag;
+    MPI_Finalized(&flag);
+    if (flag)
+        return std::vector<int>();
     return predictions_;
 }

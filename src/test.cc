@@ -58,9 +58,8 @@ int main(void)
   vec_t y_train = deserialize_vec("../test/y_train");
   vec_t y_test = deserialize_vec("../test/y_test");
 
-  auto drf = DistributedRF(3, "gini", 10, 3, true);
+  auto drf = DistributedRF(3, "gini", 10, -1, true);
   drf.distributed_fit(x_train, y_train);
-
   drf.distributed_predict(x_test);
 
   auto preds = drf.get_predictions();
