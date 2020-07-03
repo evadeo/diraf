@@ -46,7 +46,7 @@ sh$ mpirun ./test_diraf
 
 ## Authors
 
-* **Mickael IDE** - [evadeo](https://github.com/evadeo)
+* **Mickael IDE** - [lowener](https://github.com/lowener)
 * **Nicolas LUGASSY** - [Ringokilol](https://github.com/Ringokilol)
 * **Arthur NAEGELY** - [Arthur-NA](https://github.com/Arthur-NA)
 
